@@ -1,0 +1,28 @@
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyd
+*.so
+.Python/
+
+# Virtual environment
+venv/
+env/
+.venv/
+Gadk/ # This is your virtual environment folder name, add it!
+
+# Logs
+*.log
+agents_log/ # The temporary log folder created by adk run
+
+# IDE specific files
+.vscode/ # If you want to ignore VS Code settings for other collaborators
+.idea/
+
+# Other common temp files
+*.bak
+*.tmp
+*.swp
