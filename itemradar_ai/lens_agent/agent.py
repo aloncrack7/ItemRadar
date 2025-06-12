@@ -6,66 +6,75 @@ from dotenv import load_dotenv
 from google.adk.agents import Agent
 from google.cloud import firestore, aiplatform
 from vertexai.language_models import TextEmbeddingModel
+from vertexai.vision_models import Image, ImageToTextModel
 
-# Cargar variables de entorno desde .env o entorno del contenedor
+# -----------------------------------------------------------------------------
+# Configuración y bootstrap
+# -----------------------------------------------------------------------------
+
 load_dotenv()
 
 PROJECT_ID: str | None = os.getenv("PROJECT_ID")
-REGION: str | None = os.getenv("REGION")
+REGION: str | None = os.getenv("REGION", "us-central1")
 INDEX_ID: str | None = os.getenv("INDEX_ID")
 
-# ------------------------------------------------------------------
-# Helpers internos
-# ------------------------------------------------------------------
+if not all([PROJECT_ID, REGION, INDEX_ID]):
+    raise RuntimeError(
+        "Faltan PROJECT_ID, REGION o INDEX_ID en variables de entorno o .env"
+    )
 
-def _ensure_config() -> None:
-    if not all([PROJECT_ID, REGION, INDEX_ID]):
-        raise RuntimeError(
-            "Faltan PROJECT_ID, REGION o INDEX_ID en variables de entorno o .env"
-        )
+# Iniciar Vertex AI **una sola vez** para que todos los métodos hereden contexto
+# (esto evita el 404 por usar el proyecto anónimo "32555940559").
+aiplatform.init(project=PROJECT_ID, location=REGION)
 
-# ------------------------------------------------------------------
-# Herramientas expuestas al LLM (deben usar tipos simples)
-# ------------------------------------------------------------------
+# Fijamos versión estable del modelo de embedding
+EMBED_MODEL_ID = "textembedding-gecko@002"
+_embedding_model = TextEmbeddingModel.from_pretrained(EMBED_MODEL_ID)
 
-def generate_embedding(text: str) -> dict:  # noqa: D401
+# -----------------------------------------------------------------------------
+# Herramientas expuestas al LLM (solo tipos simples → dict)
+# -----------------------------------------------------------------------------
+
+def generate_embedding(text: str) -> dict:
     """Devuelve el embedding de *text* como lista de floats."""
     try:
-        model = TextEmbeddingModel.from_pretrained("textembedding-gecko@latest")
-        vec = model.get_embeddings([text])[0].values
+        vec = _embedding_model.get_embeddings([text])[0].values
         return {"status": "success", "embedding": vec}
     except Exception as exc:  # pragma: no cover
         return {"status": "error", "error_message": str(exc)}
 
 
-def register_found_item(
-    description: str,
-    location: str = "",
-    photo_url: str = "",
-) -> dict:  # noqa: D401
-    """Registra un objeto encontrado.
-
-    Args:
-        description: Descripción textual del objeto.
-        location: Ubicación donde se encontró (cadena vacía si no se especifica).
-        photo_url: URL pública de la foto (cadena vacía si no se especifica).
-    """
+def extract_description_from_image(photo_url: str) -> str:
+    """Uses Gemini Vision to extract a description from an image URL."""
     try:
-        _ensure_config()
+        image = Image.from_uri(photo_url)
+        model = ImageToTextModel.from_pretrained("gemini-1.0-pro-vision")
+        prompt = "Describe the main object in this image as if for a lost-and-found notice."
+        response = model.predict(image, prompt=prompt, max_output_tokens=128)
+        return response.text.strip()
+    except Exception as exc:
+        raise RuntimeError(f"Gemini Vision error: {exc}")
 
-        # 1) Generar embedding
-        model = TextEmbeddingModel.from_pretrained("textembedding-gecko@latest")
-        embedding = model.get_embeddings([description])[0].values
 
-        # 2) Upsert en Matching Engine
-        aiplatform.init(project=PROJECT_ID, location=REGION)
+def register_found_item(
+    location: str,
+    photo_url: str,
+) -> dict:
+    """Registra un objeto encontrado usando Gemini Vision para extraer la descripción."""
+    try:
+        # 1) Extraer descripción con Gemini Vision
+        description = extract_description_from_image(photo_url)
+        if not description:
+            return {"status": "error", "error_message": "No description extracted from image."}
+        # 2) Generar embedding
+        embedding = _embedding_model.get_embeddings([description])[0].values
+        # 3) Upsert en Matching Engine
         index = aiplatform.MatchingEngineIndex(INDEX_ID)
         item_id = f"found_{uuid.uuid4().hex[:8]}"
-        index.upsert_datapoints([
-            {"datapoint_id": item_id, "feature_vector": embedding}
-        ])
-
-        # 3) Guardar metadatos en Firestore
+        index.upsert_datapoints(
+            [{"datapoint_id": item_id, "feature_vector": embedding}]
+        )
+        # 4) Guardar metadatos en Firestore
         db = firestore.Client(project=PROJECT_ID)
         db.collection("found_items").document(item_id).set(
             {
@@ -76,26 +85,23 @@ def register_found_item(
                 "timestamp": datetime.datetime.utcnow(),
             }
         )
-
-        return {"status": "success", "item_id": item_id}
-
+        return {"status": "success", "item_id": item_id, "description": description}
     except Exception as exc:  # pragma: no cover
         return {"status": "error", "error_message": str(exc)}
 
 
-# ------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Definición del agente ADK
-# ------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 root_agent = Agent(
     name="lens_agent",
     model="gemini-2.0-flash",
-    description=
-        "Ingesta de objetos encontrados: genera embedding, lo indexa en Vertex AI "
-        "Matching Engine y guarda metadatos en Firestore.",
+    description=(
+        "Ingesta de objetos encontrados: extrae descripción con Gemini Vision, genera embedding, lo indexa en Vertex AI Matching Engine y guarda metadatos en Firestore."
+    ),
     instruction=(
-        "Cuando el usuario describa un nuevo objeto encontrado, llama a "
-        "register_found_item con la descripción, ubicación y URL de foto."
+        "Cuando el usuario suba la foto de un objeto encontrado, llama a register_found_item con la ubicación y URL de foto."
     ),
     tools=[generate_embedding, register_found_item],
 )
