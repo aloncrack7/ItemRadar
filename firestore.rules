@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Colección de reportes de objetos perdidos
+    // ===============================
+    // NOTE: In production we enforce authenticated access. During local emulator testing or staging, you can temporarily relax rules by applying allow true. Remember to revert before deploying to prod.
+    // ===============================
+    match /lost_reports/{doc} {
+      // PROD ⇒ solo usuarios autenticados
+      allow read, write: if request.auth != null;
+      // DEV: set the condition to true to allow open read/write during development
+      // allow read, write: if true;
+    }
+
+    // Colección de objetos encontrados
+    match /found_items/{doc} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

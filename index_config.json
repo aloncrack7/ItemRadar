@@ -1,0 +1,16 @@
+{
+  "config": {
+    "dimensions": 768,
+    "distanceMeasureType": "COSINE_DISTANCE",
+    "approximateNeighborsCount": 10,
+    "algorithmConfig": {
+      "treeAhConfig": {
+        "leafNodeEmbeddingCount": 1000,
+        "leafNodesToSearchPercent": 7
+      }
+    }
+  },
+  "updateConfig": {
+    "enableUpsert": true
+  }
+}
