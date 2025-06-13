@@ -4,49 +4,50 @@ multi-agent AI that reunites city residents with lost items in minutes. Chatbot 
 ```mermaid
 
 flowchart TD
-    %% ───────── Front-end ─────────
-    subgraph User_Frontend["📱 User & Front-end"]
+    %% ─────── Front-end ───────
+    subgraph User["📱 User Front-end"]
         LostChat[("Lost-Item Chatbot<br/>(chatbot_agent)")]
-        FoundUploader[("Lens Uploader<br/>(lens_agent)")]
+        FoundUp[("Lens Uploader<br/>(lens_agent)")]
     end
 
-    %% ───────── ADK runtime ─────────
+    %% ─────── ADK runtime ───────
     subgraph ADK["🧠 ADK runtime"]
-        LensAgent["lens_agent"]
-        ChatbotAgent["chatbot_agent"]
-        MatcherAgent["matcher_agent"]
-        ReducerAgent["reducer_agent"]
-        FilterAgent["filter_agent"]
-        AnalyticsAgent["analytics_agent"]
+        LensA["lens_agent"]
+        ChatA["chatbot_agent"]
+        MatchA["matcher_agent"]
+        RedA["reducer_agent"]
+        FilA["filter_agent"]
+        AnaA["analytics_agent"]
     end
 
-    %% ───────── GCP services ─────────
-    subgraph GCP["☁️ Google Cloud Services"]
-        Firestore[(Firestore<br/>found_items / lost_reports)]
+    %% ─────── GCP services ───────
+    subgraph GCP["☁️ Google Cloud"]
+        FS[(Firestore<br/>found_items / lost_reports)]
         ME[(Vertex AI Matching Engine<br/>item_embeddings)]
         BQ[(BigQuery<br/>match_events)]
     end
 
-    %% ───────── Flow ─────────
-    FoundUploader  --> |photo + desc| LensAgent
-    LensAgent      --> |embedding|   ME
-    LensAgent      --> |metadata|    Firestore
+    %% ─────── Flows ───────
+    FoundUp  -->|photo + desc|  LensA
+    LensA    -->|embedding|     ME
+    LensA    -->|metadata|      FS
 
-    LostChat       --> ChatbotAgent
-    ChatbotAgent   --> MatcherAgent
-    MatcherAgent   --> |find_neighbors| ME
-    MatcherAgent   --> |candidates|     ReducerAgent
-    ReducerAgent   --> |question|       ChatbotAgent
-    ChatbotAgent   --> |answer|         FilterAgent
-    FilterAgent    --> |filtered list|  ReducerAgent
-    FilterAgent    --> |match!|         ChatbotAgent
+    LostChat --> ChatA
+    ChatA    --> MatchA
+    MatchA   -->|find_neighbors| ME
+    MatchA   -->|candidates|     RedA
+    RedA     -->|question|       ChatA
+    ChatA    -->|answer|         FilA
+    FilA     -->|filtered|       RedA
+    FilA     -->|match found|    ChatA
 
-    LensAgent      --> |log| BQ
-    ChatbotAgent   --> |log| BQ
+    LensA    -->|log| BQ
+    ChatA    -->|log| BQ
 
-    %% ───────── Styling ─────────
+    %% Styling
     classDef agent fill:#fdf6e3,stroke:#657b83,stroke-width:1px;
     classDef gcp   fill:#e7f2ff,stroke:#2b76d4,stroke-width:1px;
-    class LensAgent,ChatbotAgent,MatcherAgent,ReducerAgent,FilterAgent,AnalyticsAgent agent;
-    class Firestore,ME,BQ gcp;
+    class LensA,ChatA,MatchA,RedA,FilA,AnaA agent;
+    class FS,ME,BQ gcp;
+
 
