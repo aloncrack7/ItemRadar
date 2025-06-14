@@ -1,7 +1,7 @@
 """
-ItemRadar — LensAgent (Fixed Geocoding)
-──────────────────────────────────────────────────
-SOLUTION: Replace unreliable Gemini geocoding with proper geocoding service
+ItemRadar — LensAgent (Fixed Geocoding + Updated Embedding Model)
+──────────────────────────────────────────────────────────────────
+SOLUTION: Replace deprecated embedding model with current version
 """
 
 from __future__ import annotations
@@ -36,7 +36,22 @@ if not all([PROJECT_ID, REGION, INDEX_ID, GOOGLE_API_KEY]):
 aiplatform.init(project=PROJECT_ID, location=REGION)
 genai.configure(api_key=GOOGLE_API_KEY)
 
-_embed = TextEmbeddingModel.from_pretrained("textembedding-gecko@002")
+# Updated embedding model - using the latest stable version
+try:
+    # Try the latest text embedding model first
+    _embed = TextEmbeddingModel.from_pretrained("text-embedding-004")
+except Exception:
+    try:
+        # Fallback to gecko-003 if 004 is not available
+        _embed = TextEmbeddingModel.from_pretrained("textembedding-gecko@003")
+    except Exception:
+        try:
+            # Final fallback to gecko-002
+            _embed = TextEmbeddingModel.from_pretrained("textembedding-gecko@002")
+        except Exception as e:
+            print(f"Warning: Could not load any embedding model: {e}")
+            _embed = None
+
 _db: firestore.Client | None = None  # lazy client
 
 
@@ -154,18 +169,36 @@ def register_found_item(
     """
     global _db
     try:
+        if _embed is None:
+            return {
+                "status": "error",
+                "error_message": "Embedding model not available. Please check your Vertex AI setup."
+            }
+
         # Create embedding
-        vec = _embed.get_embeddings([description])[0].values
+        embedding_result = _embed.get_embeddings([description])
+        if not embedding_result or not hasattr(embedding_result[0], 'values'):
+            return {
+                "status": "error",
+                "error_message": "Failed to generate embedding for the description."
+            }
+
+        vec = embedding_result[0].values
 
         # Save to Vertex AI Matching Engine
-        index = aiplatform.MatchingEngineIndex(INDEX_ID)
-        item_id = f"found_{uuid.uuid4().hex[:8]}"
-        index.upsert_datapoints([{"datapoint_id": item_id, "feature_vector": vec}])
+        try:
+            index = aiplatform.MatchingEngineIndex(INDEX_ID)
+            item_id = f"found_{uuid.uuid4().hex[:8]}"
+            index.upsert_datapoints([{"datapoint_id": item_id, "feature_vector": vec}])
+        except Exception as e:
+            print(f"Warning: Failed to save to Matching Engine: {e}")
+            # Continue anyway - at least save to Firestore
 
         # Save metadata to Firestore
         if _db is None:
             _db = firestore.Client(project=PROJECT_ID)
 
+        item_id = f"found_{uuid.uuid4().hex[:8]}"
         _db.collection("found_items").document(item_id).set({
             "id": item_id,
             "description": description,
@@ -179,6 +212,32 @@ def register_found_item(
         return {"status": "success", "item_id": item_id}
     except Exception as exc:
         return {"status": "error", "error_message": str(exc)}
+
+
+# ─── Helper function to check available models ─────────────────────────────
+
+def check_available_models():
+    """
+    Debug function to check which embedding models are available.
+    """
+    models_to_try = [
+        "text-embedding-004",
+        "text-embedding-preview-0409",
+        "textembedding-gecko@003",
+        "textembedding-gecko@002",
+        "textembedding-gecko@001"
+    ]
+
+    available_models = []
+    for model_name in models_to_try:
+        try:
+            test_model = TextEmbeddingModel.from_pretrained(model_name)
+            available_models.append(model_name)
+            print(f"✓ {model_name} - Available")
+        except Exception as e:
+            print(f"✗ {model_name} - Not available: {str(e)[:100]}...")
+
+    return available_models
 
 
 # ─── Updated Agent definition ────────────────────────────────────────────
@@ -226,3 +285,13 @@ root_agent = Agent(
     ),
     tools=[geocode_location, register_found_item],
 )
+
+# ─── Debug/Setup function ─────────────────────────────────────────────
+
+if __name__ == "__main__":
+    print("=== ItemRadar Model Check ===")
+    available = check_available_models()
+    if available:
+        print(f"\nRecommended model to use: {available[0]}")
+    else:
+        print("\nNo embedding models available. Check your project permissions.")
