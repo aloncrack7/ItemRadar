@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "radar": "itemradar-prod",
+    "default": "itemradar-prod"
+  },
+  "targets": {},
+  "etags": {}
+}
