@@ -40,27 +40,27 @@ def check_number_of_text(texts: list[str]) -> bool:
 # -----------------------------------------------------------------------------
 
 root_agent = Agent(
-    name="ReducerAgent",
+    name="FilterAgent",
     model="gemini-2.0-flash",
     description=(
         """
-        You are an agent that helps to reduce the number of objects in a list.
-        You would reived the description of the objects in a list,
-        you woud generate the question that best reduces the number of objects
-        as if you were playing who's who.
-        You will use the LLM to generate the best question to ask.
-        The question should be clear and concise, and should be able to be answered with a yes or no.
-        You would return the question as a string.
+        You are an agent that helps to filter the objects in a list
+        You would receive the description of the objects in a list, together with a question and the answers
+        you would take said question and filter which objects of the list fullfill the requirements posted by
+        the question and response
+        you will use an LLM to filter 
+        You must return the objects that fullfil the question using a another reduced list
+        Each element of the list is a string.
         """
     ),
     instruction=(
         """
-        Whenever you recived a list of objects, you should generate the question that best reduces the 
-        number of objects in the list.
+        Whenever you recived a list of objects, a question and the answer you should filter the given to obtain 
+        the list that fullfils the question and the answer.
         Check if the number of objects in the list is greater than 1 calling the function `check_number_of_text` 
         using the list **texts**.	
-        You should use the LLM to generate the question.
-        Return the question as a string.
+        You should use the LLM to generate the second list.
+        Return the ONLY the list containing strings.
         """
     ),
     tools=[check_number_of_text]
