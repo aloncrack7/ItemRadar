@@ -21,11 +21,15 @@ load_dotenv()
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # Import your handlers from the adapter
-from itemradar_ai.telegram_adapter import (
+from multiAgent.telegram_adapter import (
     handle_lost_flow,
     handle_found_flow,
-    handle_location_confirmation,
+    handle_found_confirmation,
     handle_lost_confirmation,
+    handle_general_chat,
+    handle_start_callback,
+    handle_help_callback,
+    handle_status_check,
     ItemRadarError,
     ValidationError,
 )
@@ -118,14 +122,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_name = update.effective_user.first_name or "there"
 
         keyboard = [
-            [InlineKeyboardButton("🔍 I lost an item", callback_data="LOST")],
-            [InlineKeyboardButton("📸 I found an item", callback_data="FOUND")],
+            [InlineKeyboardButton("🔍 I lost an item", callback_data="start_lost")],
+            [InlineKeyboardButton("📸 I found an item", callback_data="start_found")],
             [
-                InlineKeyboardButton("📊 My Reports", callback_data="MY_REPORTS"),
+                InlineKeyboardButton("📊 My Reports", callback_data="check_status"),
                 InlineKeyboardButton("🔍 Search Items", callback_data="SEARCH")
             ],
             [
-                InlineKeyboardButton("ℹ️ Help", callback_data="HELP"),
+                InlineKeyboardButton("ℹ️ Help", callback_data="show_help"),
                 InlineKeyboardButton("📞 Support", callback_data="SUPPORT")
             ],
         ]
@@ -315,7 +319,7 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.clear()
 
         if current_flow:
-            flow_name = "Lost Item Report" if current_flow == "LOST" else "Found Item Report"
+            flow_name = "Lost Item Report" if current_flow == "lost" else "Found Item Report"
             message = (
                 f"❌ **{flow_name} Cancelled**\n\n"
                 f"Your progress has been cleared.\n"
@@ -349,9 +353,9 @@ async def choose_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await log_user_activity(update, f"menu_choice_{choice}")
 
-        if choice == "LOST":
+        if choice == "start_lost":
             context.user_data.clear()
-            context.user_data["flow"] = "LOST"
+            context.user_data["flow"] = "lost"
             context.user_data["step"] = 0
 
             await query.edit_message_text(
@@ -367,9 +371,9 @@ async def choose_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="Markdown"
             )
 
-        elif choice == "FOUND":
+        elif choice == "start_found":
             context.user_data.clear()
-            context.user_data["flow"] = "FOUND"
+            context.user_data["flow"] = "found"
             context.user_data["step"] = 0
 
             await query.edit_message_text(
@@ -385,21 +389,8 @@ async def choose_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="Markdown"
             )
 
-        elif choice == "MY_REPORTS":
-            await query.edit_message_text(
-                "📊 **My Reports**\n\n"
-                "🚧 *Feature coming soon!*\n\n"
-                "Soon you'll be able to:\n"
-                "• View your submitted reports\n"
-                "• Check report status\n"
-                "• Edit or delete reports\n"
-                "• See match notifications\n\n"
-                "Stay tuned for updates!",
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🏠 Back to Menu", callback_data="MENU")
-                ]]),
-                parse_mode="Markdown"
-            )
+        elif choice == "check_status":
+            await handle_status_check(update, context)
 
         elif choice == "SEARCH":
             await query.edit_message_text(
@@ -417,8 +408,8 @@ async def choose_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="Markdown"
             )
 
-        elif choice == "HELP":
-            await help_command(update, context)
+        elif choice == "show_help":
+            await handle_help_callback(update, context)
 
         elif choice == "SUPPORT":
             support_text = (
@@ -453,14 +444,14 @@ async def choose_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             user_name = update.effective_user.first_name or "there"
             keyboard = [
-                [InlineKeyboardButton("🔍 I lost an item", callback_data="LOST")],
-                [InlineKeyboardButton("📸 I found an item", callback_data="FOUND")],
+                [InlineKeyboardButton("🔍 I lost an item", callback_data="start_lost")],
+                [InlineKeyboardButton("📸 I found an item", callback_data="start_found")],
                 [
-                    InlineKeyboardButton("📊 My Reports", callback_data="MY_REPORTS"),
+                    InlineKeyboardButton("📊 My Reports", callback_data="check_status"),
                     InlineKeyboardButton("🔍 Search Items", callback_data="SEARCH")
                 ],
                 [
-                    InlineKeyboardButton("ℹ️ Help", callback_data="HELP"),
+                    InlineKeyboardButton("ℹ️ Help", callback_data="show_help"),
                     InlineKeyboardButton("📞 Support", callback_data="SUPPORT")
                 ],
             ]
@@ -534,26 +525,13 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await log_user_activity(update, f"message_in_{flow or 'no_flow'}")
 
-        if flow == "LOST":
+        if flow == "lost":
             await handle_lost_flow(update, context)
-        elif flow == "FOUND":
+        elif flow == "found":
             await handle_found_flow(update, context)
         else:
-            # No active flow: show helpful menu
-            keyboard = [
-                [InlineKeyboardButton("🔍 I lost an item", callback_data="LOST")],
-                [InlineKeyboardButton("📸 I found an item", callback_data="FOUND")],
-                [InlineKeyboardButton("ℹ️ Help & Guide", callback_data="HELP")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-
-            await update.message.reply_text(
-                "👋 **Hi there!**\n\n"
-                "I'm here to help you with lost and found items.\n\n"
-                "**Please choose an option to get started:**",
-                reply_markup=reply_markup,
-                parse_mode="Markdown"
-            )
+            # Handle general messages with the manager agent
+            await handle_general_chat(update, context)
 
     except ValidationError as e:
         logger.warning(f"Validation error for user {update.effective_user.id}: {e}")
@@ -665,15 +643,15 @@ def main():
     app.add_handler(
         CallbackQueryHandler(
             choose_flow,
-            pattern="^(LOST|FOUND|HELP|SUPPORT|MENU|MY_REPORTS|SEARCH|DELETE_DATA|CONFIRM_DELETE)$"
+            pattern="^(start_lost|start_found|show_help|SUPPORT|MENU|check_status|SEARCH|DELETE_DATA|CONFIRM_DELETE)$"
         )
     )
 
     # 3) Found flow confirmation callbacks
     app.add_handler(
         CallbackQueryHandler(
-            handle_location_confirmation,
-            pattern="^location_"
+            handle_found_confirmation,
+            pattern="^(register_found|edit_found|cancel_found)$"
         )
     )
 
@@ -685,7 +663,15 @@ def main():
         )
     )
 
-    # 5) All other messages → route to active flow
+    # 5) Start callback handler
+    app.add_handler(
+        CallbackQueryHandler(
+            handle_start_callback,
+            pattern="^(start_found|start_lost|check_status|show_help)$"
+        )
+    )
+
+    # 6) All other messages → route to appropriate handler
     app.add_handler(
         MessageHandler(
             filters.ALL & ~filters.COMMAND,
@@ -693,7 +679,7 @@ def main():
         )
     )
 
-    # 6) Enhanced global error handler
+    # 7) Enhanced global error handler
     app.add_error_handler(error_handler)
 
     # Start the bot
