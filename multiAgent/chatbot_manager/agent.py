@@ -326,7 +326,7 @@ def format_final_result(item_data: dict, tool_context: ToolContext) -> dict:
     tool_context.state["workflow_complete"] = True
 
     description = item_data.get("description", "Item")
-    contact = item_data.get("contact_info", "Check with front desk")
+    contact = item_data.get("contact", "Check with front desk")
     location_found = item_data.get("location", "Unknown location")
 
     message = f"✅ **Found your item!**\n\n📋 **Description**: {description}\n📍 **Found at**: {location_found}\n📞 **Contact**: {contact}"
@@ -341,7 +341,7 @@ def format_final_result(item_data: dict, tool_context: ToolContext) -> dict:
 # Main chatbot manager agent
 root_agent = Agent(
     name="chatbot_manager",
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash",
     description=(
         "Lost Items Workflow Manager. Orchestrates the complete lost item search process: "
         "collects user info, coordinates with matcher/reducer/filter agents, manages iterative filtering, "

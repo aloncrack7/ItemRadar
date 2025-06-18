@@ -30,8 +30,8 @@ def fetch_items_from_firestore() -> list[dict]:
             items.append({
                 "id": item["id"],
                 "description": item["description"],
-                "location": item.get("location", ""),  # Optional field
-                "contact": item.get("contact", ""),
+                "location": item.get("address", ""),  # Optional field
+                "contact": item.get("email", ""),
                 "date_found": item.get("date_found", ""),
                 "additional_details": item.get("additional_details", "")
             })
@@ -50,7 +50,11 @@ def get_items(query: str) -> str:  # Changed function name to match FILE1
         if not items:
             return json.dumps({"matches": [], "error": "No items found in Firestore."})
 
-        # Use the exact same prompt structure as FILE1
+        items_block = "\n".join(
+    f"{item['id']}: {item['description']} "
+    f"(Location: {item.get('location','N/A')}, Contact: {item.get('contact','N/A')})"
+    for item in items
+)
         prompt = f"""
 You are an expert at matching item descriptions.
 
@@ -58,7 +62,7 @@ Here is a user's query for a lost item:
 "{query}"
 
 Below is a list of items that people have found:
-{chr(10).join([f"{item['id']}: {item['description']}" for item in items])}
+{items_block}
 
 Your task is to return **only the items from the list** that are semantically similar to the user's query.
 The descriptions do not need to match exactly — even partial or vague similarities are acceptable.
@@ -67,8 +71,8 @@ Do not generate new items. Do not explain. Do not say anything outside the respo
 Respond strictly in this exact JSON format:
 {{
   "matches": [
-    {{"id": "item_id", "description": "item description"}},
-    ...
+    {{ "id": "item_id", "description": "item description", "location": "…", "contact": "…" }},
+    …
   ]
 }}
 
@@ -93,13 +97,15 @@ If nothing matches, return:
 tool = FunctionTool(get_items)
 
 # Define the matcher agent exactly like FILE1
-root_agent = LlmAgent(  # Changed back to root_agent to match FILE1
+root_agent = LlmAgent(
     name="matcher_agent",
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash",
     tools=[tool],
     instruction=(
-        "When the user gives a query, call once the tool `get_items` with the query. "
-        "Return the function output directly, do not add explanation"
+        "Whenever you receive user input, immediately call the tool `get_items` "
+        "with the user’s query—as `{ \"query\": <user_text> }`—and then return the "
+        "tool’s raw JSON response. Do not ask any clarifying questions, do not say anything "
+        "else, and do not try to match itself in free-form text."
     ),
 )
 
