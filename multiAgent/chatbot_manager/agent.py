@@ -12,6 +12,7 @@ load_dotenv()
 from .sub_agents.matcher_agent.agent import matcher_agent
 from .sub_agents.reducer_agent.agent import reducer_agent
 from .sub_agents.filter_agent.agent import filter_agent
+from .sub_agents.lens_agent.agent import lens_agent
 
 
 def initiate_search(description: str, location: str, tool_context: ToolContext) -> dict:
@@ -182,6 +183,7 @@ def apply_filter_logic(description: str, question: str, is_yes: bool) -> bool:
     return has_attribute if is_yes else not has_attribute
 
 
+# TODO: better to use AI
 def extract_question_attribute(question_lower: str) -> str:
     """
     Extract the main attribute being asked about from the question.
@@ -353,7 +355,8 @@ You are the Lost Items Workflow Manager. Your job is to guide users through find
 🔄 **WORKFLOW PHASES:**
 
 **Phase 1: Information Collection**
-- Ask user for item description and location where they lost it
+- Ask user for item description or picture and location where they lost it
+    - If the user passes a photo pass the photo to the lens_agent to extract both the description and location of it
 - Use `initiate_search(description, location)` when you have both pieces
 
 **Phase 2: Search Execution**  
@@ -412,7 +415,8 @@ Be conversational and helpful throughout the process!
     sub_agents=[
         matcher_agent,
         reducer_agent,
-        filter_agent
+        filter_agent,
+        lens_agent
     ],
     tools=[
         initiate_search,
@@ -424,6 +428,7 @@ Be conversational and helpful throughout the process!
         format_final_result,
         AgentTool(matcher_agent),
         AgentTool(reducer_agent),
-        AgentTool(filter_agent)
+        AgentTool(filter_agent),
+        AgentTool(lens_agent)
     ],
 )
