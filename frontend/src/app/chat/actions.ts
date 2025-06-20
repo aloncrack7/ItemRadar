@@ -1,8 +1,6 @@
 "use server";
 
 import { z } from 'zod';
-import { chatAssistantFlow } from '@/ai/flows/chat-assistant-flow';
-import type { ChatAssistantFlowInput, ChatAssistantFlowOutput } from '@/ai/flows/chat-assistant-flow';
 
 export interface ChatMessageContentPart {
   type: 'text' | 'imageUrl';
@@ -37,11 +35,65 @@ const chatFormSchema = z.object({
       return z.NEVER;
     }
   }).optional(),
-  imageFile: z.instanceof(File).optional()
+  imageFile: z
+    .any()
+    .transform(val => (val instanceof File ? val : undefined))
     .refine(file => !file || file.size <= MAX_FILE_SIZE, `Max file size is 5MB.`)
-    .refine(file => !file || ACCEPTED_IMAGE_TYPES.includes(file.type), `Accepted image types: JPG, PNG, WEBP, GIF.`),
+    .refine(file => !file || ACCEPTED_IMAGE_TYPES.includes(file.type), `Accepted image types: JPG, PNG, WEBP, GIF.`)
+    .optional(),
 });
 
+// Function to call the multi-agent system via API
+async function callMultiAgentSystem(input: {
+  userInput: string;
+  itemType: 'lost' | 'found';
+  photoDataUri?: string;
+  history?: ChatMessage[];
+}): Promise<{ aiResponse: string }> {
+  try {
+    // Get the API URL from environment or use default
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    
+    // Prepare the request payload
+    const payload = {
+      user_input: input.userInput,
+      item_type: input.itemType,
+      photo_data_uri: input.photoDataUri,
+      history: input.history?.map(msg => ({
+        role: msg.role,
+        content: msg.content.map(part => ({
+          type: part.type,
+          text: part.text || '',
+          image_url: part.imageUrl || ''
+        }))
+      })) || []
+    };
+
+    // Make the API call
+    const response = await fetch(`${apiUrl}/api/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    
+    if (!result.success) {
+      throw new Error(result.error || 'Unknown error from multi-agent system');
+    }
+
+    return { aiResponse: result.response };
+  } catch (error) {
+    console.error('Error calling multi-agent system:', error);
+    throw new Error(`Failed to communicate with AI system: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
 
 export async function handleUserMessage(
   prevState: { lastMessageId?: string; aiResponse?: string | null; error?: string | null },
@@ -77,39 +129,26 @@ export async function handleUserMessage(
     }
   }
 
-  const flowInput: ChatAssistantFlowInput = {
-    userInput: userInput || '',
-    itemType,
-    photoDataUri,
-    history: history?.map(msg => ({
-      role: msg.role === 'assistant' ? 'model' : msg.role, // Genkit uses 'model' for assistant
-      parts: msg.content.map(part => {
-        if (part.type === 'imageUrl' && part.imageUrl && msg.role === 'user' && photoDataUri === part.imageUrl) {
-          // This ensures the current uploaded image is passed correctly for the flow
-          return { inlineData: { mimeType: imageFile!.type, data: photoDataUri!.split(',')[1] } };
-        }
-        return { text: part.text || '' };
-      }).filter(p => p.text || p.inlineData) // Filter out empty parts
-    })).filter(h => h.parts.length > 0) || [],
-  };
-  
-  // If user only sent an image, add a placeholder text for userInput for the flow
-  if (!flowInput.userInput && flowInput.photoDataUri) {
-    flowInput.userInput = "(User sent an image)";
-  }
-
+  // If user only sent an image, add a placeholder text for userInput
+  const finalUserInput = userInput || (photoDataUri ? "(User sent an image)" : "");
 
   try {
-    const output: ChatAssistantFlowOutput = await chatAssistantFlow(flowInput);
+    const output = await callMultiAgentSystem({
+      userInput: finalUserInput,
+      itemType,
+      photoDataUri,
+      history: history || []
+    });
+    
     const aiMessageId = `ai-${Date.now()}`;
     return {
       lastMessageId: aiMessageId,
       aiResponse: output.aiResponse,
     };
   } catch (error) {
-    console.error('Error calling Genkit flow:', error);
+    console.error('Error calling multi-agent system:', error);
     return {
-      error: 'Sorry, I encountered an issue. Please try again.',
+      error: error instanceof Error ? error.message : 'Sorry, I encountered an issue. Please try again.',
     };
   }
 }

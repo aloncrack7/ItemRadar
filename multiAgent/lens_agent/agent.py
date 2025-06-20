@@ -460,6 +460,9 @@ root_agent = Agent(
     tools=[geocode_location, register_found_item],
 )
 
+# Export for API usage
+lens_agent = root_agent
+
 # ─── Debug/Setup function ─────────────────────────────────────────────
 
 if __name__ == "__main__":

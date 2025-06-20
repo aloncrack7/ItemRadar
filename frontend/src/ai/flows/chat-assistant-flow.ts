@@ -8,39 +8,13 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
-
-const ChatMessagePartSchema = z.object({
-  text: z.string().optional(),
-  inlineData: z.object({
-    mimeType: z.string(),
-    data: z.string(), // Base64 encoded string
-  }).optional(),
-});
-
-const ChatHistoryMessageSchema = z.object({
-  role: z.enum(['user', 'model', 'system']),
-  parts: z.array(ChatMessagePartSchema),
-});
-
-export const ChatAssistantFlowInputSchema = z.object({
-  userInput: z.string().describe("The user's latest message or query."),
-  itemType: z.enum(['lost', 'found']).describe("Whether the user is reporting a 'lost' or 'found' item."),
-  photoDataUri: z
-    .string()
-    .optional()
-    .describe(
-      "An optional photo of the item, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
-    ),
-  history: z.array(ChatHistoryMessageSchema).optional().describe("The conversation history up to this point."),
-});
-export type ChatAssistantFlowInput = z.infer<typeof ChatAssistantFlowInputSchema>;
-
-export const ChatAssistantFlowOutputSchema = z.object({
-  aiResponse: z.string().describe("The AI assistant's response to the user."),
-});
-export type ChatAssistantFlowOutput = z.infer<typeof ChatAssistantFlowOutputSchema>;
-
+import {
+  ChatAssistantFlowInputSchema,
+  ChatAssistantFlowOutputSchema,
+  ChatAssistantFlowInput,
+  ChatAssistantFlowOutput,
+  ChatHistoryMessageSchema,
+} from './chat-assistant-flow-schemas';
 
 const prompt = ai.definePrompt({
   name: 'chatAssistantPrompt',
@@ -87,8 +61,7 @@ Keep your responses brief and focused on gathering the next piece of information
 `,
 });
 
-
-export const chatAssistantFlow = ai.defineFlow(
+const flow = ai.defineFlow(
   {
     name: 'chatAssistantFlow',
     inputSchema: ChatAssistantFlowInputSchema,
@@ -123,7 +96,6 @@ export const chatAssistantFlow = ai.defineFlow(
       }
     }
 
-
     const { output } = await prompt(promptInput);
     if (!output) {
         // Handle cases where output might be null or undefined, e.g. safety reasons
@@ -132,3 +104,8 @@ export const chatAssistantFlow = ai.defineFlow(
     return { aiResponse: output.aiResponse };
   }
 );
+
+// Export as an async function for server actions
+export async function chatAssistantFlow(input: ChatAssistantFlowInput): Promise<ChatAssistantFlowOutput> {
+  return await flow(input);
+}

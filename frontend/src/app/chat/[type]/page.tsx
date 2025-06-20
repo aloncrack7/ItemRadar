@@ -2,8 +2,8 @@ import { ChatInterface } from '@/components/chat/chat-interface';
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
-export async function generateMetadata({ params }: { params: { type: string } }): Promise<Metadata> {
-  const type = params.type;
+export async function generateMetadata({ params }: { params: Promise<{ type: string }> }): Promise<Metadata> {
+  const { type } = await params;
   if (type !== 'lost' && type !== 'found') {
     return {
       title: 'Chat Not Found - ItemRadar',
@@ -16,8 +16,8 @@ export async function generateMetadata({ params }: { params: { type: string } })
   };
 }
 
-export default function ChatPage({ params }: { params: { type: string } }) {
-  const { type } = params;
+export default async function ChatPage({ params }: { params: Promise<{ type: string }> }) {
+  const { type } = await params;
 
   if (type !== 'lost' && type !== 'found') {
     notFound();

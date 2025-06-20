@@ -4,47 +4,59 @@ import { z } from 'zod';
 import { lostItemSchema, foundItemSchema } from '@/lib/schemas';
 import type { LostItemFormValues, FoundItemFormValues } from '@/lib/schemas';
 
-// Helper function to simulate backend processing and potential errors
-async function processItemReport<T extends LostItemFormValues | FoundItemFormValues>(
-  data: T,
-  itemType: 'lost' | 'found'
-): Promise<{ success: boolean; message: string; data?: T }> {
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 1000));
+// API base URL - adjust based on your setup
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-  console.log(`Received ${itemType} item report:`, data);
+// Helper function to make API calls
+async function callAPI<T>(endpoint: string, data: any): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
 
-  // Simulate potential backend validation or processing error
-  // if (data.itemName.toLowerCase().includes("test_error")) {
-  //   return { success: false, message: `Simulated error processing ${itemType} item: ${data.itemName}` };
-  // }
-
-  // For image handling, in a real scenario, you'd upload files to storage (e.g., Firebase Storage)
-  // and save URLs or references. For now, we'll just log the file names if present.
-  if (data.images && data.images.length > 0) {
-    console.log("Uploaded images:");
-    data.images.forEach(file => {
-      // In a server action, `file` is a File object.
-      console.log(`- ${file.name} (type: ${file.type}, size: ${file.size} bytes)`);
-    });
-    // Here you would typically use a library like @google-cloud/storage or similar
-    // to upload `file.stream()` to a bucket.
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `API call failed: ${response.status}`);
   }
 
+  return response.json();
+}
 
-  return { 
-    success: true, 
-    message: `Your ${itemType} item report for "${data.itemName}" has been submitted successfully. We will contact you if we have any updates.`,
-    data 
-  };
+// Helper function to process images for API
+function processImagesForAPI(images: File[]): string[] {
+  // In a real implementation, you would upload images to storage
+  // and return URLs. For now, we'll return empty array
+  // TODO: Implement image upload to cloud storage
+  return [];
 }
 
 export async function reportLostItemAction(
   data: LostItemFormValues
-): Promise<{ success: boolean; message: string }> {
+): Promise<{ success: boolean; message: string; search_id?: string }> {
   try {
     const validatedData = lostItemSchema.parse(data);
-    return await processItemReport(validatedData, 'lost');
+    
+    // Process images
+    const imageUrls = processImagesForAPI(validatedData.images || []);
+    
+    // Call the API
+    const apiData = {
+      itemName: validatedData.itemName,
+      description: validatedData.description,
+      lastSeenLocation: validatedData.lastSeenLocation,
+      contactInfo: validatedData.contactInfo,
+      images: imageUrls,
+    };
+
+    const result = await callAPI<{ success: boolean; message: string; search_id?: string }>(
+      '/api/lost-item',
+      apiData
+    );
+
+    return result;
   } catch (error) {
     if (error instanceof z.ZodError) {
       console.error("Validation error (lost item):", error.errors);
@@ -57,10 +69,29 @@ export async function reportLostItemAction(
 
 export async function reportFoundItemAction(
   data: FoundItemFormValues
-): Promise<{ success: boolean; message: string }> {
+): Promise<{ success: boolean; message: string; item_id?: string }> {
   try {
     const validatedData = foundItemSchema.parse(data);
-    return await processItemReport(validatedData, 'found');
+    
+    // Process images
+    const imageUrls = processImagesForAPI(validatedData.images || []);
+    
+    // Call the API
+    const apiData = {
+      itemName: validatedData.itemName,
+      description: validatedData.description,
+      foundLocation: validatedData.foundLocation,
+      pickupInstructions: validatedData.pickupInstructions,
+      contactInfo: validatedData.contactInfo,
+      images: imageUrls,
+    };
+
+    const result = await callAPI<{ success: boolean; message: string; item_id?: string }>(
+      '/api/found-item',
+      apiData
+    );
+
+    return result;
   } catch (error) {
     if (error instanceof z.ZodError) {
       console.error("Validation error (found item):", error.errors);
@@ -68,5 +99,24 @@ export async function reportFoundItemAction(
     }
     console.error("Error reporting found item:", error);
     return { success: false, message: "An unexpected error occurred while reporting the found item." };
+  }
+}
+
+// Helper function to check search status
+export async function checkSearchStatusAction(
+  searchId: string
+): Promise<{ success: boolean; status?: string; matches_found?: number }> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/search-status/${searchId}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to check search status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    return { success: true, ...result };
+  } catch (error) {
+    console.error("Error checking search status:", error);
+    return { success: false };
   }
 }
