@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -42,6 +41,10 @@ export function ChatInterface({ itemType, title, description }: ChatInterfacePro
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
+  // Streaming state
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+  const [streamingText, setStreamingText] = useState('');
 
   const [formState, formAction] = useFormState(handleUserMessage, {
     lastMessageId: '',
@@ -147,6 +150,41 @@ export function ChatInterface({ itemType, title, description }: ChatInterfacePro
     };
     setMessages(prevMessages => [...prevMessages, newUserMessage]);
 
+    // Create AI message placeholder for streaming
+    const aiMessageId = `ai-${Date.now()}`;
+    const aiMessagePlaceholder: ChatMessage = {
+      id: aiMessageId,
+      role: 'assistant',
+      content: [{ type: 'text', text: '' }]
+    };
+    setMessages(prevMessages => [...prevMessages, aiMessagePlaceholder]);
+
+    // Set streaming state
+    setIsStreaming(true);
+    setStreamingMessageId(aiMessageId);
+    setStreamingText('');
+
+    // Process image file to data URI if present
+    let photoDataUri: string | undefined = undefined;
+    if (imageFile) {
+      try {
+        const arrayBuffer = await imageFile.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        photoDataUri = `data:${imageFile.type};base64,${buffer.toString('base64')}`;
+      } catch (error) {
+        console.error("Error converting file to data URI:", error);
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'Failed to process the uploaded image. Please try again with a different image.',
+        });
+        setIsStreaming(false);
+        setStreamingMessageId(null);
+        setMessages(prevMessages => prevMessages.filter(msg => msg.id !== aiMessageId));
+        return;
+      }
+    }
+
     const formData = new FormData();
     formData.append('userInput', inputText.trim());
     formData.append('itemType', itemType);
@@ -159,7 +197,61 @@ export function ChatInterface({ itemType, title, description }: ChatInterfacePro
       formData.append('imageFile', imageFile);
     }
     
-    formAction(formData);
+    // Use streaming instead of form action
+    await handleStreamingChat({
+      userInput: inputText.trim(),
+      itemType,
+      photoDataUri,
+      history: historyForFlow
+    }, {
+      onThinking: () => {
+        setStreamingText('Assistant is thinking...');
+        // Update the message to show thinking state
+        setMessages(prevMessages => 
+          prevMessages.map(msg => 
+            msg.id === aiMessageId 
+              ? { ...msg, content: [{ type: 'text', text: 'Assistant is thinking...' }] }
+              : msg
+          )
+        );
+      },
+      onPartial: (text: string) => {
+        // Update the message in real-time with accumulated text
+        setMessages(prevMessages => 
+          prevMessages.map(msg => 
+            msg.id === aiMessageId 
+              ? { ...msg, content: [{ type: 'text', text: msg.content[0]?.text + text }] }
+              : msg
+          )
+        );
+      },
+      onComplete: (text: string) => {
+        setStreamingText(text);
+        // Final update to the message
+        setMessages(prevMessages => 
+          prevMessages.map(msg => 
+            msg.id === aiMessageId 
+              ? { ...msg, content: [{ type: 'text', text }] }
+              : msg
+          )
+        );
+        setIsStreaming(false);
+        setStreamingMessageId(null);
+      },
+      onError: (error: string) => {
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: error,
+        });
+        // Remove the AI message placeholder on error
+        setMessages(prevMessages => prevMessages.filter(msg => msg.id !== aiMessageId));
+        setIsStreaming(false);
+        setStreamingMessageId(null);
+        // Restore user input if submission failed
+        setInputText(inputText.trim());
+      }
+    });
 
     setInputText('');
     removeImage(); // Clears preview and file state
@@ -189,7 +281,7 @@ export function ChatInterface({ itemType, title, description }: ChatInterfacePro
   }, [isCameraDialogOpen, cameraStream, stopCameraStream]);
 
   const handleOpenCameraButtonClick = async () => {
-    if (imagePreview || pending || isCameraDialogOpen) return;
+    if (imagePreview || pending || isStreaming || isCameraDialogOpen) return;
     setCameraError(null);
     setHasCameraPermission(null);
     setIsCameraDialogOpen(true);
@@ -253,6 +345,140 @@ export function ChatInterface({ itemType, title, description }: ChatInterfacePro
     setIsCameraDialogOpen(false);
   };
   
+  // Client-side streaming function
+  const handleStreamingChat = async (payload: {
+    userInput: string;
+    itemType: 'lost' | 'found';
+    photoDataUri?: string;
+    history: ChatMessage[];
+  }, callbacks: {
+    onThinking?: () => void;
+    onPartial?: (text: string) => void;
+    onComplete?: (text: string) => void;
+    onError?: (error: string) => void;
+  }) => {
+    try {
+      // Validate API URL
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (!apiUrl) {
+        throw new Error('API URL is not configured. Please set NEXT_PUBLIC_API_URL environment variable.');
+      }
+
+      // Validate URL format
+      try {
+        new URL(apiUrl);
+      } catch {
+        throw new Error('Invalid API URL format in NEXT_PUBLIC_API_URL environment variable.');
+      }
+
+      // Prepare the request payload
+      const requestPayload = {
+        user_input: payload.userInput,
+        item_type: payload.itemType,
+        photo_data_uri: payload.photoDataUri,
+        history: payload.history?.map(msg => ({
+          role: msg.role,
+          content: msg.content.map(part => ({
+            type: part.type,
+            text: part.text || '',
+            image_url: part.imageUrl || ''
+          }))
+        })) || []
+      };
+
+      // Validate payload size (prevent sending overly large requests)
+      const payloadSize = JSON.stringify(requestPayload).length;
+      const maxPayloadSize = 10 * 1024 * 1024; // 10MB
+      if (payloadSize > maxPayloadSize) {
+        throw new Error('Request payload is too large. Please reduce the history or image size.');
+      }
+
+      // Create fetch request for streaming
+      const response = await fetch(`${apiUrl}/api/chat/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestPayload),
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        throw new Error(`API request failed: ${response.status} ${response.statusText}. ${errorText}`);
+      }
+
+      // Handle streaming response
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body available for streaming');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          
+          if (done) break;
+          
+          buffer += decoder.decode(value, { stream: true });
+          
+          // Process complete lines
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // Keep incomplete line in buffer
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                
+                switch (data.type) {
+                  case 'thinking':
+                    callbacks.onThinking?.();
+                    break;
+                  case 'partial':
+                    callbacks.onPartial?.(data.message);
+                    break;
+                  case 'complete':
+                    callbacks.onComplete?.(data.message);
+                    return; // End streaming
+                  case 'error':
+                    callbacks.onError?.(data.message);
+                    return; // End streaming
+                }
+              } catch (e) {
+                console.warn('Failed to parse SSE data:', line, e);
+              }
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+    } catch (error) {
+      console.error('Error calling multi-agent system with streaming:', error);
+
+      // Provide more specific error messages
+      if (error instanceof Error) {
+        if (error.message.includes('API URL')) {
+          callbacks.onError?.('Configuration error: API service is not properly configured.');
+        } else if (error.message.includes('timeout') || error.name === 'AbortError') {
+          callbacks.onError?.('The AI service is taking too long to respond. Please try again.');
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+          callbacks.onError?.('Unable to connect to the AI service. Please check your internet connection and try again.');
+        } else if (error.message.includes('payload')) {
+          callbacks.onError?.(error.message);
+        } else {
+          callbacks.onError?.('Sorry, I encountered an issue communicating with the AI service. Please try again.');
+        }
+      } else {
+        callbacks.onError?.('An unexpected error occurred. Please try again.');
+      }
+    }
+  };
 
   return (
     <>
@@ -266,11 +492,13 @@ export function ChatInterface({ itemType, title, description }: ChatInterfacePro
             {messages.map((msg) => (
               <ChatMessageBubble key={msg.id} message={msg} />
             ))}
-            {pending && (
+            {(pending || isStreaming) && (
               <div className="flex justify-start">
                   <div className="flex items-center space-x-2 bg-muted p-3 rounded-lg max-w-[70%]">
                       <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                      <span className="text-sm text-muted-foreground">Assistant is typing...</span>
+                      <span className="text-sm text-muted-foreground">
+                        {isStreaming ? 'Assistant is typing...' : 'Processing...'}
+                      </span>
                   </div>
               </div>
             )}
@@ -300,14 +528,14 @@ export function ChatInterface({ itemType, title, description }: ChatInterfacePro
                 onChange={handleFileChange}
                 accept="image/png, image/jpeg, image/webp, image/gif"
                 className="hidden"
-                disabled={pending || !!imageFile || isCameraDialogOpen}
+                disabled={pending || isStreaming || !!imageFile || isCameraDialogOpen}
               />
               <Button
                 type="button"
                 variant="outline"
                 size="icon"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={pending || !!imageFile || isCameraDialogOpen}
+                disabled={pending || isStreaming || !!imageFile || isCameraDialogOpen}
                 className="shrink-0"
                 aria-label="Attach image"
               >
@@ -318,7 +546,7 @@ export function ChatInterface({ itemType, title, description }: ChatInterfacePro
                 variant="outline"
                 size="icon"
                 onClick={handleOpenCameraButtonClick}
-                disabled={pending || !!imageFile || isCameraDialogOpen}
+                disabled={pending || isStreaming || !!imageFile || isCameraDialogOpen}
                 className="shrink-0"
                 aria-label="Take photo"
               >
@@ -329,12 +557,18 @@ export function ChatInterface({ itemType, title, description }: ChatInterfacePro
                 placeholder="Type your message..."
                 value={inputText}
                 onChange={handleInputChange}
-                disabled={pending || isCameraDialogOpen}
+                disabled={pending || isStreaming || isCameraDialogOpen}
                 className="flex-grow min-w-0"
                 aria-label="Message input"
               />
-              <Button type="submit" size="icon" disabled={pending || (!inputText.trim() && !imageFile) || isCameraDialogOpen} className="shrink-0" aria-label="Send message">
-                {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+              <Button 
+                type="submit" 
+                size="icon" 
+                disabled={pending || isStreaming || (!inputText.trim() && !imageFile) || isCameraDialogOpen} 
+                className="shrink-0" 
+                aria-label="Send message"
+              >
+                {(pending || isStreaming) ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
               </Button>
             </div>
           </form>
@@ -377,12 +611,12 @@ export function ChatInterface({ itemType, title, description }: ChatInterfacePro
           </div>
           <DialogFooter className="p-4 pt-0 flex sm:justify-between">
             <DialogClose asChild>
-              <Button type="button" variant="outline">Cancel</Button>
+              <Button type="button" variant="outline" disabled={isStreaming}>Cancel</Button>
             </DialogClose>
             <Button 
               type="button" 
               onClick={handleCaptureImage} 
-              disabled={!cameraStream || !!cameraError || hasCameraPermission === false}
+              disabled={!cameraStream || !!cameraError || hasCameraPermission === false || isStreaming}
             >
               <CameraIcon className="mr-2 h-4 w-4" /> Capture
             </Button>

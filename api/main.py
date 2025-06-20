@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import sys
@@ -144,12 +145,53 @@ async def chat_with_agent(request: ChatRequest, *, response: Response, req: Requ
         session_id = get_or_create_session_id(req, response, request.session_id)
         user_id = session_id.split("_")[0]
 
+        logger.info(f"Processing chat request for session {session_id}, user {user_id}")
+
         try:
             await session_service.create_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
-        except Exception:
-            pass
+            logger.info(f"Session created/retrieved: {session_id}")
+        except Exception as e:
+            logger.warning(f"Session creation warning: {e}")
 
-        parts = [types.Part(text=request.user_input)]
+        # Build context-aware user input that includes conversation history
+        context_enhanced_input = request.user_input
+        
+        # If history is provided, include it in the context
+        if request.history and len(request.history) > 0:
+            logger.info(f"Including {len(request.history)} history messages for session {session_id}")
+            
+            # Build conversation context
+            conversation_context = []
+            for history_msg in request.history:
+                if history_msg.get('role') in ['user', 'assistant']:
+                    # Extract text content from history message
+                    text_content = ""
+                    if 'content' in history_msg:
+                        for content_part in history_msg['content']:
+                            if content_part.get('type') == 'text' and content_part.get('text'):
+                                text_content += content_part['text'] + " "
+                    
+                    if text_content.strip():
+                        role_label = "User" if history_msg['role'] == 'user' else "Assistant"
+                        conversation_context.append(f"{role_label}: {text_content.strip()}")
+            
+            # Add conversation context to the user input
+            if conversation_context:
+                context_enhanced_input = f"""CONVERSATION HISTORY:
+{chr(10).join(conversation_context)}
+
+CURRENT MESSAGE: {request.user_input}"""
+                
+                # Debug logging
+                logger.info(f"Enhanced context for session {session_id}:")
+                logger.info(f"Original input: {request.user_input}")
+                logger.info(f"Enhanced input: {context_enhanced_input}")
+            else:
+                logger.info(f"No conversation history provided for session {session_id}")
+                logger.info(f"Using original input: {request.user_input}")
+
+        # Process current message
+        parts = [types.Part(text=context_enhanced_input)]
         if request.photo_data_uri and request.photo_data_uri.startswith('data:image/'):
             try:
                 image_data = request.photo_data_uri.split(',', 1)[1]
@@ -159,13 +201,19 @@ async def chat_with_agent(request: ChatRequest, *, response: Response, req: Requ
                         data=image_data
                     )
                 ))
+                logger.info(f"Added image to message for session {session_id}")
             except Exception as e:
-                print(f"Error processing image: {e}")
+                logger.error(f"Error processing image: {e}")
 
         user_content = types.Content(role='user', parts=parts)
         final_response = ""
         response_received = False
 
+        logger.info(f"Running agent for session {session_id} with enhanced context")
+
+        # Run the agent with the current message
+        # The Google ADK session service automatically maintains conversation history
+        # based on the session_id, so each call will have access to previous messages
         async for event in manager_runner.run_async(user_id=user_id, session_id=session_id, new_message=user_content):
             if event.is_final_response() and event.content and event.content.parts:
                 final_response = " ".join([
@@ -175,13 +223,137 @@ async def chat_with_agent(request: ChatRequest, *, response: Response, req: Requ
                 break
 
         if not response_received or not final_response.strip():
+            logger.error(f"No valid response received for session {session_id}")
             return ChatResponse(success=False, response="", error="No valid response received from agent")
 
+        logger.info(f"Agent response received for session {session_id}: {final_response[:100]}...")
         return ChatResponse(success=True, response=final_response.strip())
 
     except Exception as e:
-        print(f"Error in chat endpoint: {e}")
+        logger.error(f"Error in chat endpoint: {e}")
         return ChatResponse(success=False, response="", error=f"Internal server error: {str(e)}")
+
+@app.post("/api/chat/stream")
+async def chat_with_agent_stream(request: ChatRequest, *, response: Response, req: Request):
+    """
+    Streaming chat endpoint that sends real-time updates as the agent processes the request.
+    """
+    async def generate_stream():
+        try:
+            session_id = get_or_create_session_id(req, response, request.session_id)
+            user_id = session_id.split("_")[0]
+
+            logger.info(f"Processing streaming chat request for session {session_id}, user {user_id}")
+
+            try:
+                await session_service.create_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
+                logger.info(f"Session created/retrieved: {session_id}")
+            except Exception as e:
+                logger.warning(f"Session creation warning: {e}")
+
+            # Build context-aware user input that includes conversation history
+            context_enhanced_input = request.user_input
+            
+            # If history is provided, include it in the context
+            if request.history and len(request.history) > 0:
+                logger.info(f"Including {len(request.history)} history messages for session {session_id}")
+                
+                # Build conversation context
+                conversation_context = []
+                for history_msg in request.history:
+                    if history_msg.get('role') in ['user', 'assistant']:
+                        # Extract text content from history message
+                        text_content = ""
+                        if 'content' in history_msg:
+                            for content_part in history_msg['content']:
+                                if content_part.get('type') == 'text' and content_part.get('text'):
+                                    text_content += content_part['text'] + " "
+                        
+                        if text_content.strip():
+                            role_label = "User" if history_msg['role'] == 'user' else "Assistant"
+                            conversation_context.append(f"{role_label}: {text_content.strip()}")
+                
+                # Add conversation context to the user input
+                if conversation_context:
+                    context_enhanced_input = f"""CONVERSATION HISTORY:
+{chr(10).join(conversation_context)}
+
+CURRENT MESSAGE: {request.user_input}"""
+                    
+                    # Debug logging
+                    logger.info(f"Enhanced context for session {session_id}:")
+                    logger.info(f"Original input: {request.user_input}")
+                    logger.info(f"Enhanced input: {context_enhanced_input}")
+                else:
+                    logger.info(f"No conversation history provided for session {session_id}")
+                    logger.info(f"Using original input: {request.user_input}")
+
+            # Process current message
+            parts = [types.Part(text=context_enhanced_input)]
+            if request.photo_data_uri and request.photo_data_uri.startswith('data:image/'):
+                try:
+                    image_data = request.photo_data_uri.split(',', 1)[1]
+                    parts.append(types.Part(
+                        inline_data=types.Blob(
+                            mime_type="image/jpeg",
+                            data=image_data
+                        )
+                    ))
+                    logger.info(f"Added image to message for session {session_id}")
+                except Exception as e:
+                    logger.error(f"Error processing image: {e}")
+
+            user_content = types.Content(role='user', parts=parts)
+
+            logger.info(f"Running streaming agent for session {session_id} with enhanced context")
+
+            # Send initial "thinking" message
+            yield f"data: {json.dumps({'type': 'thinking', 'message': 'Assistant is thinking...'})}\n\n"
+
+            # Run the agent and stream responses
+            response_text = ""
+            response_received = False
+
+            async for event in manager_runner.run_async(user_id=user_id, session_id=session_id, new_message=user_content):
+                if event.is_final_response() and event.content and event.content.parts:
+                    # Stream the final response
+                    for part in event.content.parts:
+                        if hasattr(part, 'text') and part.text:
+                            response_text += part.text
+                            # Send partial response
+                            yield f"data: {json.dumps({'type': 'partial', 'message': part.text})}\n\n"
+                    
+                    response_received = True
+                    break
+                elif event.content and event.content.parts:
+                    # Stream intermediate responses
+                    for part in event.content.parts:
+                        if hasattr(part, 'text') and part.text:
+                            response_text += part.text
+                            yield f"data: {json.dumps({'type': 'partial', 'message': part.text})}\n\n"
+
+            if not response_received or not response_text.strip():
+                logger.error(f"No valid response received for session {session_id}")
+                yield f"data: {json.dumps({'type': 'error', 'message': 'No valid response received from agent'})}\n\n"
+            else:
+                logger.info(f"Streaming agent response completed for session {session_id}: {response_text[:100]}...")
+                # Send completion signal
+                yield f"data: {json.dumps({'type': 'complete', 'message': response_text.strip()})}\n\n"
+
+        except Exception as e:
+            logger.error(f"Error in streaming chat endpoint: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'message': f'Internal server error: {str(e)}'})}\n\n"
+
+    return StreamingResponse(
+        generate_stream(),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
 
 @app.post("/api/lost-item", response_model=LostItemResponse)
 async def report_lost_item(request: LostItemRequest, *, response: Response, req: Request):
