@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from 'zod';
+import { cookies } from 'next/headers';
 
 export interface ChatMessageContentPart {
   type: 'text' | 'imageUrl';
@@ -37,7 +38,7 @@ const chatFormSchema = z.object({
   }).optional(),
   imageFile: z
     .any()
-    .transform(val => (val instanceof File ? val : undefined))
+    .transform(val => (typeof File !== 'undefined' && val instanceof File ? val : undefined))
     .refine(file => !file || file.size <= MAX_FILE_SIZE, `Max file size is 5MB.`)
     .refine(file => !file || ACCEPTED_IMAGE_TYPES.includes(file.type), `Accepted image types: JPG, PNG, WEBP, GIF.`)
     .optional(),
@@ -76,6 +77,7 @@ async function callMultiAgentSystem(input: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
+      credentials: 'include'
     });
 
     if (!response.ok) {

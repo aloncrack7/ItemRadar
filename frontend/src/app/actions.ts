@@ -15,6 +15,7 @@ async function callAPI<T>(endpoint: string, data: any): Promise<T> {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(data),
+    credentials: 'include'
   });
 
   if (!response.ok) {
