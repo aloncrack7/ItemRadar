@@ -14,6 +14,7 @@ env/
 .venv/
 Gadk/ # This is your virtual environment folder name, add it!
 google-cloud-sdk/
+frontend/node_modules/
 
 # Logs
 *.log
