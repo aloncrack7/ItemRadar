@@ -458,7 +458,7 @@ def get_intelligent_fallback_question(texts: list[str], previous_questions: list
 # Create the enhanced agent
 reducer_agent = Agent(
     name="enhanced_reducer_agent",
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash",
     description="Enhanced universal item discriminator that uses AI reasoning to generate personalized clarifying questions for any type of lost item by intelligently analyzing patterns, characteristics, and differences.",
     instruction="""
     You are an enhanced universal item discriminator that helps narrow down lists of potential lost items using intelligent analysis.

@@ -169,7 +169,7 @@ def filter_objects(texts: list[str], question: str, answer: str, tool_context: T
 
 filter_agent = Agent(
     name="filter_agent",
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash",
     description="Filters item descriptions based on user answers to clarifying questions.",
     instruction="""
     You filter a list of item descriptions based on the user's answer to a specific question.
