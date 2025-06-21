@@ -75,42 +75,6 @@ def store_match_results(match_results: list[dict], tool_context: ToolContext) ->
     }
 
 
-def get_clarifying_question(tool_context: ToolContext) -> dict:
-    """
-    Tool: Get a clarifying question from the reducer agent based on current matches.
-    """
-    match_results = tool_context.state.get("match_results", [])
-
-    if len(match_results) <= 1:
-        return {"question": None, "reason": "Not enough matches to generate question"}
-
-    # Extract descriptions from match results
-    item_descriptions = []
-    for match in match_results:
-        if isinstance(match, dict):
-            description = match.get("description", str(match))
-        else:
-            description = str(match)
-        item_descriptions.append(description)
-
-    # Call the reducer agent with the item descriptions
-    try:
-        # This simulates calling the reducer agent's analyze function
-        # In practice, you'd call the reducer agent properly
-        from .sub_agents.reducer_agent.agent import analyze_items_and_generate_question
-        result = analyze_items_and_generate_question(item_descriptions, tool_context)
-
-        if result.get("question"):
-            tool_context.state["current_question"] = result["question"]
-            return {"question": result["question"], "status": "success"}
-        else:
-            return {"question": None, "reason": "Could not generate discriminating question"}
-
-    except Exception as e:
-        print(f"Error generating question: {e}")
-        return {"question": None, "reason": f"Error: {str(e)}"}
-
-
 def store_user_answer(question:str, answer: str, tool_context: ToolContext) -> dict:
     """
     Tool: Store user's answer to a clarifying question.
@@ -373,10 +337,10 @@ Based on match count:
 - 2+ matches → Start filtering process
 
 **Phase 4: Iterative Filtering (for multiple matches)**
-1. Call reducer_agent to get a discriminating question
+1. Call reducer_agent with the list of objects to get a discriminating question
 2. Present ONLY the question to user (don't show match details)
 3. When user answers and the question: use `store_user_answer(answer)`
-4. Use `filter_matches_by_answer()` to reduce the match list
+4. Call filter_agent with the list of objects, the question and the answer to reduce the match list
 5. Check new match count and repeat if needed
 
 🔧 **KEY TOOLS:**
@@ -385,7 +349,6 @@ Based on match count:
 - `store_match_results(results)` - Save matcher results
 
 - `store_user_answer(answer)` - Save user's response and question
-- `filter_matches_by_answer()` - Apply filtering based on answer
 - `format_final_result(item)` - Format successful final result
 
 ⚠️ **CRITICAL RULES:**
@@ -400,7 +363,7 @@ Based on match count:
 - User describes lost item → initiate_search()
 - Get matches from matcher_agent → store_match_results()
 - If multiple matches → Call reducer_agent → ask user
-- User answers and question → store_user_answer() → filter_matches_by_answer()
+- User answers and question → store_user_answer() → call filter_agent
 - Repeat filtering until 0 or 1 matches remain
 - Present final result or "not found" message
 
@@ -435,7 +398,7 @@ Be conversational and helpful throughout the process! Remember that you're havin
         store_match_results,
         #get_clarifying_question,
         store_user_answer,
-        filter_matches_by_answer,
+        #filter_matches_by_answer,
         format_final_result,
         AgentTool(matcher_agent),
         AgentTool(reducer_agent),
