@@ -362,12 +362,19 @@ async def choose_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "🔍 **Lost Item Report**\n\n"
                 "I'll help you create a detailed lost item report.\n\n"
                 "**Please describe what you lost in detail:**\n\n"
+                "or upload a photo of the item 📷.\n\n"
                 "📝 *Include details like:*\n"
                 "• Color, size, and brand\n"
                 "• Distinctive features\n"
                 "• Condition or damage\n"
                 "• Model or type\n\n"
-                "**Example:** *Blue iPhone 15 Pro with black leather case, small scratch on the back corner*",
+                "**Example:** *Blue iPhone 15 Pro with black leather case, small scratch on the back corner*\n\n"
+                "📷 *Photo tips:*\n"
+                "• Good lighting\n"
+                "• Clear focus\n"
+                "• Show distinctive features\n"
+                "• Include any labels or brands\n\n"
+                "🤖 *Our AI will automatically describe the item for you!*",
                 parse_mode="Markdown"
             )
 

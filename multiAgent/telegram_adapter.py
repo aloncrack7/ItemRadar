@@ -546,7 +546,9 @@ async def handle_lost_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Step 0: Item description
         if step == 0:
-            if len(text) < MIN_DESCRIPTION_LENGTH:
+            photo_was_sent = update.message.photo is not None
+
+            if len(text) < MIN_DESCRIPTION_LENGTH and not photo_was_sent:
                 await update.message.reply_text(
                     f"📝 **Lost Item Report**\n\n"
                     f"Please provide a detailed description of what you lost (at least {MIN_DESCRIPTION_LENGTH} characters).\n\n"
@@ -581,6 +583,14 @@ async def handle_lost_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             Provide a helpful response to guide the user for better reporting.
             """
+
+            if photo_was_sent:
+                # Download image if provided
+                file_id = update.message.photo[-1].file_id
+                img_bytes = await download_photo(file_id, context)
+
+                # Include image in analysis
+                analysis_prompt += f"\n\nImage data: {base64.b64encode(img_bytes).decode('utf-8')}"
 
             try:
                 analysis = await run_agent_with_timeout(
