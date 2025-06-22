@@ -18,6 +18,21 @@
 </a>
 ![Google Cloud](https://img.shields.io/badge/GoogleCloud-%234285F4.svg?style=for-the-badge&logo=google-cloud&logoColor=white)
 ![Firebase](https://img.shields.io/badge/firebase-a08021?style=for-the-badge&logo=firebase&logoColor=ffcd34)
+<a href="https://https://firebase.studio/" target="_blank" style="text-decoration: none;">
+  <span style="
+    display: inline-flex;
+    align-items: center;
+    background-color:rgb(216, 109, 37);
+    color: white;
+    font-family: 'Segoe UI', sans-serif;
+    font-weight: bold;
+    font-size: 12px;
+    padding: 4px 10px;
+  ">
+    <img src="assets/Firebase_Studio_icon.svg" alt="Firebase Studio" style="height:20px; margin-right:8px;">
+    Firebase Studio
+  </span>
+</a>
 ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
 ![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
