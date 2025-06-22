@@ -162,7 +162,7 @@ See [API_INTEGRATION.md](API_INTEGRATION.md) for detailed documentation.
 
 ## Telegram integration
 
-The system now includes a telegram bot that connects the user as easyly as possible,
+The system now includes a telegram bot that connects the user as easily as possible,
 a single bot manges all the interactions with the system:
 
 - **Lost Item Reports**: Connect to `chatbot_manager` agent for search workflow
