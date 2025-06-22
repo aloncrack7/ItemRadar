@@ -1,5 +1,28 @@
 # ItemRadarAI 🔍
 
+![Google Gemini](https://img.shields.io/badge/google%20gemini-8E75B2?style=for-the-badge&logo=google%20gemini&logoColor=white)
+<a href="https://developers.google.com/adk" target="_blank" style="text-decoration: none;">
+  <span style="
+    display: inline-flex;
+    align-items: center;
+    background-color:rgb(0, 0, 0);
+    color: white;
+    font-family: 'Segoe UI', sans-serif;
+    font-weight: bold;
+    font-size: 12px;
+    padding: 4px 10px;
+  ">
+    <img src="assets/google-adk-logo.png" alt="Google ADK" style="height:20px; margin-right:8px;">
+    Google ADK
+  </span>
+</a>
+![Google Cloud](https://img.shields.io/badge/GoogleCloud-%234285F4.svg?style=for-the-badge&logo=google-cloud&logoColor=white)
+![Firebase](https://img.shields.io/badge/firebase-a08021?style=for-the-badge&logo=firebase&logoColor=ffcd34)
+![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
+![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)
+![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
+![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)
+
 **Connecting People with Lost Belongings**
 
 A citizen network that reunites people with their lost belongings in minutes using AI-powered multi-agent technology.
@@ -79,9 +102,20 @@ ItemRadarAI operates through a sophisticated multi-agent AI system:
    ```
    
 3. **Google application Credentials**
-   ```bash
+
+- Windows 
+
+   ```powershell
    $env:GOOGLE_APPLICATION_CREDENTIALS="route to your service-account.json"
    ```
+
+-  Linux
+
+   ```bash
+   export GOOGLE_APPLICATION_CREDENTIALS"route to your service-account.json"
+   ```
+
+
 4. **Set up environment variables**
    ```bash
    cd multiagent
@@ -110,6 +144,17 @@ The system now includes a FastAPI server that connects the frontend with the mul
 - **Search Status**: Track ongoing lost item searches
 
 See [API_INTEGRATION.md](API_INTEGRATION.md) for detailed documentation.
+
+## Telegram integration
+
+The system now includes a telegram bot that connects the user as easyly as possible,
+a single bot manges all the interactions with the system:
+
+- **Lost Item Reports**: Connect to `chatbot_manager` agent for search workflow
+- **Found Item Reports**: Connect to `lens_agent` for geocoding and registration
+- **Search Status**: Track ongoing lost item searches
+
+See [TELEGRAM_INTEGRATION.md](TELEGRAM_INTEGRATION.md) for detailed documentation.
 
 ## Testing
 

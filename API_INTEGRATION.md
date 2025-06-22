@@ -156,6 +156,5 @@ For production deployment:
 
 - [ ] Add authentication and user management
 - [ ] Implement real-time notifications
-- [ ] Add image upload and processing
 - [ ] Create admin dashboard for managing items
 - [ ] Add analytics and reporting features 
