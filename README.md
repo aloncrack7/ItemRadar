@@ -38,6 +38,10 @@
 ![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
 ![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)
 
+## Medium Post
+
+[![Read on Medium](https://img.shields.io/badge/Read_on-Medium-black?logo=medium&logoColor=white&style=for-the-badge)](https://medium.com/@igelcru/lost-something-let-our-ai-agents-find-it-a512f8d610de)
+
 **Connecting People with Lost Belongings**
 
 A citizen network that reunites people with their lost belongings in minutes using AI-powered multi-agent technology.
