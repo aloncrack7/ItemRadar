@@ -36,7 +36,6 @@
 ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
 ![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
-![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)
 
 ## Medium Post
 
@@ -163,17 +162,6 @@ The system now includes a FastAPI server that connects the frontend with the mul
 - **Search Status**: Track ongoing lost item searches
 
 See [API_INTEGRATION.md](API_INTEGRATION.md) for detailed documentation.
-
-## Telegram integration
-
-The system now includes a telegram bot that connects the user as easily as possible,
-a single bot manges all the interactions with the system:
-
-- **Lost Item Reports**: Connect to `chatbot_manager` agent for search workflow
-- **Found Item Reports**: Connect to `lens_agent` for geocoding and registration
-- **Search Status**: Track ongoing lost item searches
-
-See [TELEGRAM_INTEGRATION.md](TELEGRAM_INTEGRATION.md) for detailed documentation.
 
 ## Testing
 
