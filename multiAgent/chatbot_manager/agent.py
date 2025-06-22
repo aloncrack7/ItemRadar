@@ -111,16 +111,18 @@ def get_clarifying_question(tool_context: ToolContext) -> dict:
         return {"question": None, "reason": f"Error: {str(e)}"}
 
 
-def store_user_answer(answer: str, tool_context: ToolContext) -> dict:
+def store_user_answer(question:str, answer: str, tool_context: ToolContext) -> dict:
     """
     Tool: Store user's answer to a clarifying question.
     """
     tool_context.state["user_answer"] = answer
+    tool_context.state["current_question"] = question
     tool_context.state["iteration_count"] = tool_context.state.get("iteration_count", 0) + 1
 
     return {
         "status": "stored",
         "answer": answer,
+        "current_question": question,
         "iteration": tool_context.state["iteration_count"]
     }
 
@@ -371,9 +373,9 @@ Based on match count:
 - 2+ matches → Start filtering process
 
 **Phase 4: Iterative Filtering (for multiple matches)**
-1. Use `get_clarifying_question()` to get a discriminating question
+1. Call reducer_agent to get a discriminating question
 2. Present ONLY the question to user (don't show match details)
-3. When user answers: use `store_user_answer(answer)`
+3. When user answers and the question: use `store_user_answer(answer)`
 4. Use `filter_matches_by_answer()` to reduce the match list
 5. Check new match count and repeat if needed
 
@@ -381,8 +383,8 @@ Based on match count:
 - `initiate_search(description, location)` - Start the search
 - `check_workflow_phase()` - Check current state  
 - `store_match_results(results)` - Save matcher results
-- `get_clarifying_question()` - Get discriminating question from reducer agent
-- `store_user_answer(answer)` - Save user's response
+
+- `store_user_answer(answer)` - Save user's response and question
 - `filter_matches_by_answer()` - Apply filtering based on answer
 - `format_final_result(item)` - Format successful final result
 
@@ -397,8 +399,8 @@ Based on match count:
 🎯 **CONVERSATION FLOW:**
 - User describes lost item → initiate_search()
 - Get matches from matcher_agent → store_match_results()
-- If multiple matches → get_clarifying_question() → ask user
-- User answers → store_user_answer() → filter_matches_by_answer()
+- If multiple matches → Call reducer_agent → ask user
+- User answers and question → store_user_answer() → filter_matches_by_answer()
 - Repeat filtering until 0 or 1 matches remain
 - Present final result or "not found" message
 
@@ -431,7 +433,7 @@ Be conversational and helpful throughout the process! Remember that you're havin
         initiate_search,
         check_workflow_phase,
         store_match_results,
-        get_clarifying_question,
+        #get_clarifying_question,
         store_user_answer,
         filter_matches_by_answer,
         format_final_result,
