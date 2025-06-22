@@ -133,13 +133,13 @@ ItemRadarAI operates through a sophisticated multi-agent AI system:
 
 4. **Set up environment variables**
    ```bash
-   cd multiagent
    cp env.template .env
    # Edit .env with your actual API keys and configuration
    ```
    
 4. **Run the program**
    ```bash
+   cd multiagent
    adk web
    ```
 
