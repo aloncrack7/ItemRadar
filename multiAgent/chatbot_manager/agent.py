@@ -75,42 +75,6 @@ def store_match_results(match_results: list[dict], tool_context: ToolContext) ->
     }
 
 
-def get_clarifying_question(tool_context: ToolContext) -> dict:
-    """
-    Tool: Get a clarifying question from the reducer agent based on current matches.
-    """
-    match_results = tool_context.state.get("match_results", [])
-
-    if len(match_results) <= 1:
-        return {"question": None, "reason": "Not enough matches to generate question"}
-
-    # Extract descriptions from match results
-    item_descriptions = []
-    for match in match_results:
-        if isinstance(match, dict):
-            description = match.get("description", str(match))
-        else:
-            description = str(match)
-        item_descriptions.append(description)
-
-    # Call the reducer agent with the item descriptions
-    try:
-        # This simulates calling the reducer agent's analyze function
-        # In practice, you'd call the reducer agent properly
-        from .sub_agents.reducer_agent.agent import analyze_items_and_generate_question
-        result = analyze_items_and_generate_question(item_descriptions, tool_context)
-
-        if result.get("question"):
-            tool_context.state["current_question"] = result["question"]
-            return {"question": result["question"], "status": "success"}
-        else:
-            return {"question": None, "reason": "Could not generate discriminating question"}
-
-    except Exception as e:
-        print(f"Error generating question: {e}")
-        return {"question": None, "reason": f"Error: {str(e)}"}
-
-
 def store_user_answer(question:str, answer: str, tool_context: ToolContext) -> dict:
     """
     Tool: Store user's answer to a clarifying question.
@@ -127,200 +91,7 @@ def store_user_answer(question:str, answer: str, tool_context: ToolContext) -> d
     }
 
 
-def filter_matches_by_answer(tool_context: ToolContext) -> dict:
-    """
-    Tool: Filter current matches based on user's answer to the question.
-    """
-    match_results = tool_context.state.get("match_results", [])
-    current_question = tool_context.state.get("current_question")
-    user_answer = tool_context.state.get("user_answer", "").lower().strip()
 
-    if not current_question or not user_answer:
-        return {"status": "error", "message": "Missing question or answer"}
-
-    # Simple filtering logic - in practice, this would be more sophisticated
-    # and might involve calling the filter_agent
-    filtered_matches = []
-
-    # Normalize the answer
-    is_yes = user_answer in ["yes", "y", "true", "1", "yeah", "yep", "si", "sí"]
-
-    for match in match_results:
-        description = match.get("description", str(match)).lower()
-        should_include = apply_filter_logic(description, current_question, is_yes)
-
-        if should_include:
-            filtered_matches.append(match)
-
-    # Update the matches
-    tool_context.state["match_results"] = filtered_matches
-
-    return {
-        "status": "filtered",
-        "original_count": len(match_results),
-        "filtered_count": len(filtered_matches),
-        "remaining_matches": filtered_matches
-    }
-
-
-def apply_filter_logic(description: str, question: str, is_yes: bool) -> bool:
-    """
-    Universal filtering logic that works for any type of item and question.
-    Extracts keywords from the question and searches for them in the description.
-    """
-    question_lower = question.lower()
-    description_lower = description.lower()
-
-    # Extract the key attribute being asked about
-    attribute = extract_question_attribute(question_lower)
-
-    if not attribute:
-        # Fallback: conservative approach - include the item
-        return True
-
-    # Check if the description contains the attribute
-    has_attribute = check_attribute_in_description(description_lower, attribute, question_lower)
-
-    # Return based on user's yes/no answer
-    return has_attribute if is_yes else not has_attribute
-
-
-# TODO: better to use AI
-def extract_question_attribute(question_lower: str) -> str:
-    """
-    Extract the main attribute being asked about from the question.
-    """
-    # Color patterns
-    colors = [
-        "black", "white", "red", "blue", "green", "yellow", "orange", "purple", "pink",
-        "brown", "gray", "grey", "silver", "gold", "beige", "tan", "navy", "maroon",
-        "lime", "teal", "cyan", "magenta", "violet", "indigo", "turquoise", "coral",
-        "cream", "ivory", "khaki", "olive", "burgundy", "crimson", "emerald", "sapphire"
-    ]
-
-    for color in colors:
-        if color in question_lower:
-            return color
-
-    # Material patterns
-    materials = [
-        "leather", "plastic", "metal", "wood", "glass", "fabric", "cotton", "silk",
-        "canvas", "rubber", "vinyl", "synthetic", "nylon", "polyester", "denim",
-        "suede", "velvet", "wool", "cashmere", "linen", "bamboo", "ceramic", "stone",
-        "paper", "cardboard", "foam", "mesh", "fleece", "jersey", "satin", "lace"
-    ]
-
-    for material in materials:
-        if material in question_lower:
-            return material
-
-    # Size patterns
-    size_keywords = ["small", "large", "big", "mini", "tiny", "huge", "oversized", "compact",
-                     "medium", "long", "short", "wide", "narrow", "thick", "thin"]
-
-    for size in size_keywords:
-        if size in question_lower:
-            return size
-
-    # Feature patterns
-    features = ["zipper", "zip", "pocket", "strap", "handle", "button", "buckle",
-                "velcro", "elastic", "padded", "cushioned", "waterproof", "wireless",
-                "bluetooth", "rechargeable", "battery", "adjustable", "removable",
-                "detachable", "foldable", "collapsible", "transparent", "clear",
-                "reflective", "reflector"]
-
-    for feature in features:
-        if feature in question_lower:
-            return feature
-
-    # Brand patterns (extract brand names from questions like "Is your item made by Nike?")
-    brands = ["nike", "adidas", "apple", "samsung", "sony", "canon", "nikon", "coach",
-              "gucci", "prada", "louis vuitton", "chanel", "rolex", "casio", "timex"]
-
-    for brand in brands:
-        if brand in question_lower:
-            return brand
-
-    # Condition patterns
-    conditions = ["new", "used", "damaged", "broken", "old", "vintage", "dirty", "clean"]
-
-    for condition in conditions:
-        if condition in question_lower:
-            return condition
-
-    # Style patterns
-    styles = ["round", "square", "rectangular", "oval", "circular", "triangular",
-              "curved", "straight", "flat", "smooth", "textured", "patterned",
-              "plain", "striped", "dotted", "floral", "geometric", "solid"]
-
-    for style in styles:
-        if style in question_lower:
-            return style
-
-    return None
-
-
-def check_attribute_in_description(description_lower: str, attribute: str, question_lower: str) -> bool:
-    """
-    Check if the attribute exists in the item description.
-    Uses smart matching that considers context and synonyms.
-    """
-    # Direct match
-    if attribute in description_lower:
-        return True
-
-    # Handle synonyms and related terms
-    synonyms = {
-        "large": ["big", "huge", "oversized", "xl", "xxl", "jumbo", "giant", "tote"],
-        "small": ["mini", "tiny", "compact", "little", "pocket", "miniature"],
-        "metal": ["metallic", "steel", "aluminum", "brass", "copper", "iron", "chrome"],
-        "plastic": ["polymer", "acrylic", "vinyl", "pvc"],
-        "waterproof": ["water resistant", "weatherproof", "water-resistant"],
-        "wireless": ["bluetooth", "wi-fi", "wifi", "cordless"],
-        "zipper": ["zip", "zipped"],
-        "strap": ["handle", "belt", "cord"],
-        "new": ["brand new", "unused", "mint", "fresh"],
-        "old": ["vintage", "antique", "aged", "worn"],
-        "damaged": ["broken", "cracked", "torn", "scratched", "chipped"],
-        "round": ["circular", "spherical"],
-        "square": ["rectangular", "box-shaped"],
-        "transparent": ["clear", "see-through", "translucent"],
-        "soft": ["flexible", "bendable", "pliable"],
-        "hard": ["rigid", "solid", "firm", "sturdy"]
-    }
-
-    # Check synonyms
-    if attribute in synonyms:
-        for synonym in synonyms[attribute]:
-            if synonym in description_lower:
-                return True
-
-    # Check if any synonym lists contain our attribute
-    for main_word, synonym_list in synonyms.items():
-        if attribute in synonym_list and main_word in description_lower:
-            return True
-
-    # Special handling for certain question types
-
-    # For electronic/battery questions
-    if attribute == "electronic" or attribute == "battery":
-        electronic_indicators = ["battery", "rechargeable", "usb", "charger", "digital",
-                                 "lcd", "led", "screen", "display", "electronic", "powered"]
-        return any(indicator in description_lower for indicator in electronic_indicators)
-
-    # For text/writing questions
-    if "text" in question_lower or "writing" in question_lower:
-        text_indicators = ["text", "writing", "words", "letters", "logo", "brand",
-                           "label", "printed", "embossed", "engraved"]
-        return any(indicator in description_lower for indicator in text_indicators)
-
-    # For moving parts questions
-    if "moving parts" in question_lower:
-        moving_indicators = ["button", "switch", "dial", "lever", "hinge", "sliding",
-                             "rotating", "adjustable", "extendable", "telescopic"]
-        return any(indicator in description_lower for indicator in moving_indicators)
-
-    return False
 
 
 def format_final_result(item_data: dict, tool_context: ToolContext) -> dict:
@@ -373,10 +144,10 @@ Based on match count:
 - 2+ matches → Start filtering process
 
 **Phase 4: Iterative Filtering (for multiple matches)**
-1. Call reducer_agent to get a discriminating question
+1. Call reducer_agent with the list of objects to get a discriminating question
 2. Present ONLY the question to user (don't show match details)
 3. When user answers and the question: use `store_user_answer(answer)`
-4. Use `filter_matches_by_answer()` to reduce the match list
+4. Call filter_agent with the list of objects, the question and the answer to reduce the match list
 5. Check new match count and repeat if needed
 
 🔧 **KEY TOOLS:**
@@ -385,7 +156,6 @@ Based on match count:
 - `store_match_results(results)` - Save matcher results
 
 - `store_user_answer(answer)` - Save user's response and question
-- `filter_matches_by_answer()` - Apply filtering based on answer
 - `format_final_result(item)` - Format successful final result
 
 ⚠️ **CRITICAL RULES:**
@@ -400,7 +170,7 @@ Based on match count:
 - User describes lost item → initiate_search()
 - Get matches from matcher_agent → store_match_results()
 - If multiple matches → Call reducer_agent → ask user
-- User answers and question → store_user_answer() → filter_matches_by_answer()
+- User answers and question → store_user_answer() → call filter_agent
 - Repeat filtering until 0 or 1 matches remain
 - Present final result or "not found" message
 
@@ -435,7 +205,7 @@ Be conversational and helpful throughout the process! Remember that you're havin
         store_match_results,
         #get_clarifying_question,
         store_user_answer,
-        filter_matches_by_answer,
+        #filter_matches_by_answer,
         format_final_result,
         AgentTool(matcher_agent),
         AgentTool(reducer_agent),
