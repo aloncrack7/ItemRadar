@@ -59,7 +59,6 @@ ItemRadarAI is an innovative platform designed to connect residents of any city 
 
 - **For Lost Item Owners**: Conversational chatbot accessible via WhatsApp, web, or mobile app that matches descriptions or photos with found items in seconds
 - **For Item Finders**: Simple photo capture with GPS location upload to instantly add items to the database
-- **For Municipalities**: Analytical dashboards displaying loss hotspots, peak times, and item categories to optimize urban cleaning and safety operations
 
 ## How It Works
 
