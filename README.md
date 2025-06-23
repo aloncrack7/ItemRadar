@@ -37,9 +37,15 @@
 ![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
 
-## Medium Post
+## Publications
 
+### Medium post
 [![Read on Medium](https://img.shields.io/badge/Read_on-Medium-black?logo=medium&logoColor=white&style=for-the-badge)](https://medium.com/@igelcru/lost-something-let-our-ai-agents-find-it-a512f8d610de)
+
+### Youtube Video
+
+[![Watch on YouTube](https://img.shields.io/badge/YouTube-▶️-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=i0bIskqgsB8)
+
 
 **Connecting People with Lost Belongings**
 
